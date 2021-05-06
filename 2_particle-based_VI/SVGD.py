@@ -54,10 +54,10 @@ class SVGD():
                     phi_sum = phi_sum + phi(x_old[j,:], x_old[i,:], score_p)
                     
                 x[i,:] = x_old[i,:] + lr * phi_sum/n
-            
+                        
         return x
     
-    def stoch_update(self, init_samples, n_iter, make_score_p, batch_size, R, lr = 1e-2):
+    def stoch_update(self, init_samples, make_score_p, n_iter, batch_size, R, lr = 1e-2):
         # stochastic SVGD update with constant learning rate lr
         phi = self.stoch_imq_phi
 
@@ -75,6 +75,6 @@ class SVGD():
                     phi_sum = phi_sum + phi(x_old[j,:], x_old[i,:], make_score_p, sigma, R)
                     
                 x[i,:] = x_old[i,:] + lr * phi_sum/n
-
+                        
         return x
 
