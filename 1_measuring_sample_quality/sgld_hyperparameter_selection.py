@@ -29,7 +29,7 @@ class SGLD():
         # n_iter = number of iterations over entire dataset
         # burn_in = number of burn-in steps
         
-        batch_no = int(n_iter / batch_size)
+        batch_no = int(R / batch_size)
         
         D = len(init_sample)
         
@@ -65,7 +65,7 @@ class SGLD():
                 x += noise
                 
                 x_list.append(x)
-                        
+                                    
         return torch.stack(x_list[burn_in:])
         
     
@@ -98,12 +98,16 @@ if __name__ == "__main__":
 
     epsilon_list = [5e-5, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2]
     
-    n_iter = 200  # number of SGLD iterations through whole dataset
+    n_iter = 400  # number of SGLD iterations through whole dataset
     
     samples_list = []  # list of samples for each epsilon
+    
     KSD_list = []
     Stoch_KSD_list01 = []
     Stoch_KSD_list001 = []
+    RF_L1_SD_list = []
+    
+    itr = 0
         
     for epsilon in epsilon_list:
         
@@ -117,12 +121,38 @@ if __name__ == "__main__":
         samples = opt.update(init_sample, batch_size, epsilon, n_iter, burn_in = 2000)
         samples_list.append(samples)
 
+        # separate out samples to reduce correlation
         
-        KSD_list.append(KSD.ksd(samples, score_p))
-        Stoch_KSD_list01.append(KSD.stoch_ksd(samples, make_score_p, int(0.1 * R), R))
-        # Stoch_KSD_list001.append(KSD.stoch_ksd(samples, make_score_p, int(0.01 * R), R))
-
+        samples_red = torch.stack([samples[j] for j in np.arange(0, len(samples), 40)])
         
+        KSD_list.append(KSD.ksd(samples_red, score_p))
+        
+        list_01 = []
+        for jj in range(5):
+            list_01.append(KSD.stoch_ksd(samples_red, make_score_p, int(0.1 * R), R))
+            
+        list_01 = torch.stack(list_01)
+        Stoch_KSD_list01.append(torch.mean(list_01))
+        print(Stoch_KSD_list01)
+        
+        list_001 = []
+        for kk in range(5):
+            list_001.append(KSD.stoch_ksd(samples_red, make_score_p, int(0.01 * R), R))
+        
+        list_001 = torch.stack(list_001)
+        Stoch_KSD_list001.append(KSD.stoch_ksd(samples_red, make_score_p, int(0.01 * R), R))
+        print(Stoch_KSD_list001)
+        
+        
+        RF_iter_list = []
+        
+        for j in range(5):
+            L1_SD = KSD.L1_RF_sd(samples_red, score_p, M = 10)
+            RF_iter_list.append(L1_SD)
+            
+        RF_iter_tensor = torch.stack(RF_iter_list)
+        RF_L1_SD_list.append(torch.median(RF_iter_tensor, axis = 0).values.detach())
+                
         # plot samples and contours
         sns.set_style('whitegrid')
 
@@ -135,8 +165,8 @@ if __name__ == "__main__":
     
         # levels for contours
         Z_max = np.max(Z)
-        min_max_gap = 0.01 * abs(Z_max)
-        levels = np.linspace(Z_max - min_max_gap, Z_max, 6)
+        min_max_gap = 0.006 * abs(Z_max)
+        levels = np.linspace(Z_max - min_max_gap, Z_max, 5)
             
         plt.contour(X,Y,Z, levels = levels)
         
@@ -146,7 +176,8 @@ if __name__ == "__main__":
         plt.xlabel(r'$\theta_1$')
         plt.ylabel(r'$\theta_2$') 
 
-        # plt.savefig('SGLD_GMM_{}.png'.format(), dpi = 1200)
+        itr += 1
+        #plt.savefig('SGLD_GMM_{}.png'.format(itr), dpi = 1200)
         plt.title("$\epsilon = ${}".format(epsilon))
         plt.show()
 
@@ -154,15 +185,24 @@ if __name__ == "__main__":
     KSD_list = torch.stack(KSD_list).detach()
     Stoch_KSD_list01 = torch.stack(Stoch_KSD_list01).detach()
     Stoch_KSD_list001 = torch.stack(Stoch_KSD_list001).detach()
+    RF_L1_SD_list = torch.stack(RF_L1_SD_list).detach()
     
-    plt.scatter(epsilon_list, KSD_list, marker = 'o', label='IMQ KSD')
-    plt.scatter(epsilon_list, Stoch_KSD_list01, marker = '^', label = 'StochKSD: 0.1R')
-    # plt.scatter(epsilon_list, Stoch_KSD_list001, marker = '^', label = 'StochKSD: 0.01R')
+    plt.plot(epsilon_list, KSD_list, '-bo', label='IMQ KSD')
+    plt.plot(epsilon_list, Stoch_KSD_list01, '--m^', label = 'StochKSD: 0.1R')
+    plt.plot(epsilon_list, Stoch_KSD_list001, '--g^', label = 'StochKSD: 0.01R')
+    plt.plot(epsilon_list, RF_L1_SD_list, '-c.', label = 'L1IMQ')
     plt.xscale('log')
     plt.yscale('log')
-    plt.xlim(bottom = 1e-6, top = 1e-1)
+    #plt.ylim(bottom = 1e-6, top = 1e-1)
     plt.legend()
     plt.xlabel(r'$\epsilon$')
     plt.ylabel('KSDs')    
-    # plt.savefig('GMM_SGLD_KSDs.png', dpi = 1200)
+    #plt.savefig('GMM_SGLD_KSDs_ALT.png', dpi = 1200)
     plt.show()
+
+    
+    
+    
+    
+
+
